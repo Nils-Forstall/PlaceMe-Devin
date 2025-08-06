@@ -43,7 +43,7 @@ export const useGroupWorkflow = () => {
       }
       
       // Get the groups details
-      const groupIds = groupMemberships.map(membership => membership.group_id)
+      const groupIds = groupMemberships.map((membership: any) => membership.group_id)
       
       if (groupIds.length === 0) {
         setUserGroups([])
@@ -61,8 +61,8 @@ export const useGroupWorkflow = () => {
       }
       
       // Combine the group details with membership info
-      const formattedGroups = groupsData.map(group => {
-        const membership = groupMemberships.find(m => m.group_id === group.id)
+      const formattedGroups = groupsData.map((group: any) => {
+        const membership = groupMemberships.find((m: any) => m.group_id === group.id)
         return {
           id: group.id,
           name: group.name,
@@ -157,7 +157,7 @@ export const useGroupWorkflow = () => {
       }
       
       // Get user profiles for the members
-      const memberUserIds = membersData.map(member => member.user_id)
+      const memberUserIds = membersData.map((member: any) => member.user_id)
       
       const { data: profiles, error: profilesError } = await ProfileService.getProfiles(memberUserIds)
         
@@ -168,8 +168,8 @@ export const useGroupWorkflow = () => {
       }
       
       // Transform member data
-      const allGroupMembers = membersData.map((member, index) => {
-        const profile = profiles.find(p => p.id === member.user_id)
+      const allGroupMembers = membersData.map((member: any, index: number) => {
+        const profile = profiles.find((p: any) => p.id === member.user_id)
         return {
           user_id: member.user_id,
           username: profile?.name || `User ${index + 1}`,
@@ -181,10 +181,10 @@ export const useGroupWorkflow = () => {
       setGroupMembers(allGroupMembers)
       
       // Create tokens for other members (excluding current user)
-      const otherMembers = allGroupMembers.filter(member => member.user_id !== currentUserId)
+      const otherMembers = allGroupMembers.filter((member: any) => member.user_id !== currentUserId)
       const initialPositions = calculateInitialPositions(otherMembers.length)
       
-      const userTokens: UserToken[] = otherMembers.map((member, index) => ({
+      const userTokens: UserToken[] = otherMembers.map((member: any, index: number) => ({
         id: member.user_id,
         firstName: member.username,
         userAvatar: member.avatar_url,

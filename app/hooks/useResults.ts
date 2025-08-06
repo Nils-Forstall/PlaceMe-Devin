@@ -142,7 +142,7 @@ export const useResults = () => {
         }
         
         // STEP 5: Get profiles for all members
-        const memberUserIds = membersData?.map(member => member.user_id) || []
+        const memberUserIds = membersData?.map((member: any) => member.user_id) || []
         
         let profiles: Profile[] = []
         if (memberUserIds.length > 0) {
