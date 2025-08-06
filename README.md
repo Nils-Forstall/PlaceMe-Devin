@@ -1,5 +1,8 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## PlaceMe Application
+PlaceMe is a social positioning application that enables groups of users to visualize their relationships and preferences through interactive 2D placement exercises.
+
 ## Getting Started
 
 First, run the development server:
