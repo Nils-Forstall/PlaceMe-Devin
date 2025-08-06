@@ -2,92 +2,9 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/auth/supabase'
-
-interface Position {
-  x: number
-  y: number
-}
-
-interface UserToken {
-  id: string
-  firstName: string
-  userAvatar: string
-  position: Position
-}
-
-interface UserGroup {
-  id: string
-  name: string
-  invite_code: string
-  role: string
-}
-
-interface GroupMember {
-  user_id: string
-  username: string
-  avatar_url: string
-  role: string
-}
-
-interface DailyAxis {
-  id: string
-  group_id: string
-  vertical_axis_pair_id: string
-  horizontal_axis_pair_id: string
-  left_label: string
-  right_label: string
-  top_label: string
-  bottom_label: string
-  date_generated: string
-  is_active: boolean
-  labels: {
-    top: string
-    bottom: string
-    left: string
-    right: string
-    labelColors: {
-      top: string
-      bottom: string
-      left: string
-      right: string
-    }
-  }
-}
-
-// Colors for members (consistent assignment)
-const getMemberColor = (index: number): string => {
-  const colors = [
-    '#EF4444', // Red
-    '#10B981', // Green  
-    '#A855F7', // Purple
-    '#F59E0B', // Amber
-    '#3B82F6', // Blue
-    '#EC4899', // Pink
-    '#8B5CF6', // Violet
-    '#F97316', // Orange
-  ]
-  
-  return colors[index % colors.length]
-}
-
-// Calculate initial positions in a circle
-const calculateInitialPositions = (memberCount: number): Position[] => {
-  const positions: Position[] = []
-  
-  for (let i = 0; i < memberCount; i++) {
-    const angle = (i * 2 * Math.PI) / memberCount
-    const radius = 0.2 // 30% from center in normalized coordinates
-    const centerX = 0.3 // Center in normalized coordinates
-    const centerY = 0.4 // Center in normalized coordinates
-    
-    const x = Math.max(0.06, Math.min(0.94, centerX + Math.cos(angle) * radius))
-    const y = Math.max(0.06, Math.min(0.94, centerY + Math.sin(angle) * radius))
-    
-    positions.push({ x, y })
-  }
-  
-  return positions
-}
+import { Position, UserToken, UserGroup, GroupMember, DailyAxis } from '../types'
+import { GroupService, ProfileService, PlacementService } from '../lib/services'
+import { calculateInitialPositions, normalizePosition, convertToPercentage } from '../lib/utils/positionUtils'
 
 export const useGroupWorkflow = () => {
   const router = useRouter()
@@ -117,15 +34,7 @@ export const useGroupWorkflow = () => {
       setCurrentUserId(user.id)
       
       // Fetch groups the user is a member of
-      const { data: groupMemberships, error: groupsError } = await supabase
-        .from('group_members')
-        .select(`
-          id,
-          role,
-          joined_at,
-          group_id
-        `)
-        .eq('user_id', user.id)
+      const { data: groupMemberships, error: groupsError } = await GroupService.getGroupMemberships(user.id)
         
       if (groupsError) {
         console.error("Error fetching group memberships:", groupsError)
@@ -143,10 +52,7 @@ export const useGroupWorkflow = () => {
         return
       }
       
-      const { data: groupsData, error: groupDetailsError } = await supabase
-        .from('groups')
-        .select('id, name, invite_code, settings, created_at')
-        .in('id', groupIds)
+      const { data: groupsData, error: groupDetailsError } = await GroupService.getGroupDetails(groupIds)
       
       if (groupDetailsError) {
         console.error("Error fetching group details:", groupDetailsError)
@@ -242,10 +148,7 @@ export const useGroupWorkflow = () => {
   const fetchGroupMembers = async (groupId: string, currentUserId: string) => {
     try {
       // Fetch group members
-      const { data: membersData, error: membersError } = await supabase
-        .from('group_members')
-        .select('id, role, user_id, joined_at')
-        .eq('group_id', groupId)
+      const { data: membersData, error: membersError } = await GroupService.getGroupMembers(groupId)
         
       if (membersError) {
         console.error("Error fetching group members:", membersError)
@@ -256,10 +159,7 @@ export const useGroupWorkflow = () => {
       // Get user profiles for the members
       const memberUserIds = membersData.map(member => member.user_id)
       
-      const { data: profiles, error: profilesError } = await supabase
-        .from('profiles')
-        .select('id, name, avatar_url')
-        .in('id', memberUserIds)
+      const { data: profiles, error: profilesError } = await ProfileService.getProfiles(memberUserIds)
         
       if (profilesError) {
         console.error("Error fetching profiles:", profilesError)
@@ -304,19 +204,17 @@ export const useGroupWorkflow = () => {
   // Positions are received in normalized coordinates (0-1)
   const handlePositionChange = async (tokenId: string, position: Position) => {
     try {
-      // Ensure position is in normalized coordinates (0-1)
-      const normalizedX = Math.max(0, Math.min(position.x, 1))
-      const normalizedY = Math.max(0, Math.min(position.y, 1))
+      const normalizedPosition = normalizePosition(position)
       
       setTokens(prevTokens => 
         prevTokens.map(token => 
           token.id === tokenId 
-            ? { ...token, position: { x: normalizedX, y: normalizedY } }
+            ? { ...token, position: normalizedPosition }
             : token
         )
       )
       
-      console.log(`📍 Updated position for ${tokenId}:`, { x: normalizedX, y: normalizedY })
+      console.log(`📍 Updated position for ${tokenId}:`, normalizedPosition)
     } catch (err: any) {
       console.error('Error updating position:', err)
       setError(err.message || 'Failed to update position')
@@ -352,24 +250,20 @@ export const useGroupWorkflow = () => {
       }
       
       // Ensure position is in normalized coordinates (0-1)
-      const normalizedX = Math.max(0, Math.min(1, position.x))
-      const normalizedY = Math.max(0, Math.min(1, position.y))
+      const normalizedPosition = normalizePosition(position)
       
       // Convert to percentage for database storage
-      const percentX = normalizedX * 100
-      const percentY = normalizedY * 100
+      const percentagePosition = convertToPercentage(normalizedPosition)
       
       // Get today's date for consistency
       const today = new Date().toISOString().split('T')[0]
       
       // Check if user already placed themselves today for this group
-      const { data: existingPlacement, error: checkError } = await supabase
-        .from('place_yourself')
-        .select('id')
-        .eq('user_id', currentUserId)
-        .eq('group_id', selectedGroup.id)
-        .eq('axis_id', dailyAxis.id)
-        .maybeSingle()
+      const { data: existingPlacement, error: checkError } = await PlacementService.checkExistingSelfPlacement(
+        currentUserId, 
+        selectedGroup.id, 
+        dailyAxis.id
+      )
 
       if (checkError) {
         console.error('Error checking existing placement:', checkError)
@@ -380,14 +274,11 @@ export const useGroupWorkflow = () => {
         console.log('📝 User already placed themselves today, updating existing placement')
         
         // Update existing placement
-        const { error: updateError } = await supabase
-          .from('place_yourself')
-          .update({
-            position_x: percentX,
-            position_y: percentY,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', existingPlacement.id)
+        const { error: updateError } = await PlacementService.updateSelfPlacement(existingPlacement.id, {
+          position_x: percentagePosition.x,
+          position_y: percentagePosition.y,
+          updated_at: new Date().toISOString()
+        })
 
         if (updateError) {
           console.error('❌ Error updating self placement:', updateError)
@@ -399,25 +290,23 @@ export const useGroupWorkflow = () => {
       }
 
       // Insert new placement
-      const { error: insertError } = await supabase
-        .from('place_yourself')
-        .insert({
-          user_id: currentUserId,
-          group_id: selectedGroup.id,
-          group_code: selectedGroup.invite_code,
-          username: userName,
-          first_name: firstName,
-          position_x: percentX,
-          position_y: percentY,
-          top_label: dailyAxis.labels.top,
-          bottom_label: dailyAxis.labels.bottom,
-          left_label: dailyAxis.labels.left,
-          right_label: dailyAxis.labels.right,
-          axis_id: dailyAxis.id,
-          vertical_axis_pair_id: dailyAxis.vertical_axis_pair_id,
-          horizontal_axis_pair_id: dailyAxis.horizontal_axis_pair_id,
-          date_placed: today
-        })
+      const { error: insertError } = await PlacementService.saveSelfPlacement({
+        user_id: currentUserId,
+        group_id: selectedGroup.id,
+        group_code: selectedGroup.invite_code,
+        username: userName,
+        first_name: firstName,
+        position_x: percentagePosition.x,
+        position_y: percentagePosition.y,
+        top_label: dailyAxis.labels.top,
+        bottom_label: dailyAxis.labels.bottom,
+        left_label: dailyAxis.labels.left,
+        right_label: dailyAxis.labels.right,
+        axis_id: dailyAxis.id,
+        vertical_axis_pair_id: dailyAxis.vertical_axis_pair_id,
+        horizontal_axis_pair_id: dailyAxis.horizontal_axis_pair_id,
+        date_placed: today
+      })
       
       if (insertError) {
         console.error('❌ Error inserting self placement:', insertError)
@@ -456,11 +345,7 @@ export const useGroupWorkflow = () => {
       
       // Clear existing placements by this user for this axis to avoid duplicates
       console.log('🧹 Clearing existing placements...')
-      const { error: deleteError } = await supabase
-        .from('place_others')
-        .delete()
-        .eq('placer_user_id', currentUserId)
-        .eq('axis_id', dailyAxis.id)
+      const { error: deleteError } = await PlacementService.clearExistingOthersPlacements(currentUserId, dailyAxis.id)
 
       if (deleteError) {
         console.warn('⚠️ Could not clear existing placements:', deleteError)
@@ -470,11 +355,8 @@ export const useGroupWorkflow = () => {
 
       // Insert new placements
       const placementsToInsert = tokens.map(token => {
-        const position = {
-          x: token.position.x * 100, // Convert from 0-1 to 0-100
-          y: token.position.y * 100  // Convert from 0-1 to 0-100
-        }
-        console.log(`📍 Token ${token.firstName}:`, position)
+        const percentagePosition = convertToPercentage(token.position)
+        console.log(`📍 Token ${token.firstName}:`, percentagePosition)
         
         return {
           placer_user_id: currentUserId,
@@ -483,8 +365,8 @@ export const useGroupWorkflow = () => {
           group_code: selectedGroup.invite_code,
           username: token.firstName,
           first_name: token.firstName,
-          position_x: position.x,
-          position_y: position.y,
+          position_x: percentagePosition.x,
+          position_y: percentagePosition.y,
           top_label: dailyAxis.labels.top,
           bottom_label: dailyAxis.labels.bottom,
           left_label: dailyAxis.labels.left,
@@ -498,9 +380,7 @@ export const useGroupWorkflow = () => {
 
       if (placementsToInsert.length > 0) {
         console.log('💾 Inserting', placementsToInsert.length, 'new placements...')
-        const { error: insertError } = await supabase
-          .from('place_others')
-          .insert(placementsToInsert)
+        const { error: insertError } = await PlacementService.saveOthersPlacement(placementsToInsert)
         
         if (insertError) {
           console.error('❌ Error saving others placements:', insertError)

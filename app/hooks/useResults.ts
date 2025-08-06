@@ -3,93 +3,18 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/auth/supabase'
 import { getUserAvatar } from '../lib/avatars'
-
-interface ResultToken {
-  user_id: string
-  username: string
-  avatar_url: string
-  color: string
-  x: number
-  y: number
-}
-
-interface IndividualGuess {
-  guesser_id: string
-  guesser_name: string
-  guesser_avatar: string
-  position: { x: number; y: number }
-}
-
-interface GuessedResult {
-  user_id: string
-  username: string
-  avatar_url: string
-  color: string
-  averagePosition: { x: number; y: number }
-  individualGuesses: IndividualGuess[]
-}
-
-interface GroupResults {
-  selfPlaced: ResultToken[]
-  guessed: GuessedResult[]
-}
-
-interface DailyAxis {
-  id: string
-  group_id: string
-  vertical_axis_pair_id: string
-  horizontal_axis_pair_id: string
-  left_label: string
-  right_label: string
-  top_label: string
-  bottom_label: string
-  date_generated: string
-  is_active: boolean
-  labels: {
-    top: string
-    bottom: string
-    left: string
-    right: string
-    labelColors: {
-      top: string
-      bottom: string
-      left: string
-      right: string
-    }
-  }
-}
-
-interface Profile {
-  id: string
-  name: string
-  avatar_url: string
-}
-
-interface Placement {
-  placer_user_id: string
-  placed_user_id: string
-  created_at: string
-  position_x: number
-  position_y: number
-  username: string
-  first_name: string
-}
-
-// Colors for members (consistent assignment)
-const getMemberColor = (index: number): string => {
-  const colors = [
-    '#EF4444', // Red
-    '#10B981', // Green  
-    '#A855F7', // Purple
-    '#F59E0B', // Amber
-    '#3B82F6', // Blue
-    '#EC4899', // Pink
-    '#8B5CF6', // Violet
-    '#F97316', // Orange
-  ]
-  
-  return colors[index % colors.length]
-}
+import { 
+  ResultToken, 
+  IndividualGuess, 
+  GuessedResult, 
+  GroupResults, 
+  DailyAxis, 
+  Profile, 
+  Placement 
+} from '../types'
+import { AxisService, PlacementService, GroupService, ProfileService } from '../lib/services'
+import { getMemberColor } from '../constants/colors'
+import { LABEL_COLORS } from '../constants/colors'
 
 export const useResults = () => {
   const router = useRouter()
@@ -140,13 +65,7 @@ export const useResults = () => {
 
         // STEP 1: Get the current daily axis for this group
         const today = new Date().toISOString().split('T')[0]
-        const { data: axisData, error: axisError } = await supabase
-          .from('axes')
-          .select('*')
-          .eq('group_id', groupId)
-          .eq('date_generated', today)
-          .eq('is_active', true)
-          .maybeSingle()
+        const { data: axisData, error: axisError } = await AxisService.getTodaysAxis(groupId, today)
 
         if (axisError) {
           console.error('Error fetching daily axis:', axisError)
@@ -177,13 +96,7 @@ export const useResults = () => {
             bottom: axisData.bottom_label,
             left: axisData.left_label,
             right: axisData.right_label,
-            labelColors: {
-              // Default colors - could be enhanced to store these in database
-              top: 'rgba(251, 207, 232, 0.95)', // Pink
-              bottom: 'rgba(167, 243, 208, 0.95)', // Green
-              left: 'rgba(221, 214, 254, 0.95)', // Purple
-              right: 'rgba(253, 230, 138, 0.95)' // Yellow
-            }
+            labelColors: LABEL_COLORS.DEFAULT
           }
         }
 
@@ -191,24 +104,14 @@ export const useResults = () => {
         console.log('✅ Loaded daily axis:', processedAxis.id)
 
         // STEP 2: Fetch self placements for this specific axis
-        const { data: selfPlacements, error: selfError } = await supabase
-          .from('place_yourself')
-          .select('*')
-          .eq('group_id', groupId)
-          .eq('axis_id', processedAxis.id) // Filter by specific axis
-          .order('created_at', { ascending: false })
+        const { data: selfPlacements, error: selfError } = await PlacementService.getSelfPlacements(groupId, processedAxis.id)
         
         if (selfError) {
           console.error('Error fetching self placements:', selfError)
         }
         
         // STEP 3: Fetch guessed placements for this specific axis
-        const { data: guessedPlacements, error: guessedError } = await supabase
-          .from('place_others')
-          .select('*')
-          .eq('group_id', groupId)
-          .eq('axis_id', processedAxis.id) // Filter by specific axis
-          .order('created_at', { ascending: false })
+        const { data: guessedPlacements, error: guessedError } = await PlacementService.getOthersPlacements(groupId, processedAxis.id)
         
         if (guessedError) {
           console.error('Error fetching guessed placements:', guessedError)
@@ -232,10 +135,7 @@ export const useResults = () => {
         const uniqueGuessedPlacements = Object.values(filteredGuessedPlacements)
         
         // STEP 4: Get group members for avatars and names
-        const { data: membersData, error: membersError } = await supabase
-          .from('group_members')
-          .select('user_id')
-          .eq('group_id', groupId)
+        const { data: membersData, error: membersError } = await GroupService.getGroupMembers(groupId)
           
         if (membersError) {
           console.error("Error fetching group members:", membersError)
@@ -246,10 +146,7 @@ export const useResults = () => {
         
         let profiles: Profile[] = []
         if (memberUserIds.length > 0) {
-          const { data: profilesData, error: profilesError } = await supabase
-            .from('profiles')
-            .select('id, name, avatar_url')
-            .in('id', memberUserIds)
+          const { data: profilesData, error: profilesError } = await ProfileService.getProfiles(memberUserIds)
             
           if (profilesError) {
             console.error("Error fetching profiles:", profilesError)
@@ -260,7 +157,7 @@ export const useResults = () => {
         
         // STEP 6: Process self placements - get most recent for each user
         const selfPlacedMap = new Map()
-        selfPlacements?.forEach(placement => {
+        selfPlacements?.forEach((placement: any) => {
           if (!selfPlacedMap.has(placement.user_id)) {
             const profile = profiles.find(p => p.id === placement.user_id)
             selfPlacedMap.set(placement.user_id, {
@@ -281,7 +178,7 @@ export const useResults = () => {
           // Group placements by placed_user_id
           const placementsByUser = new Map<string, any[]>()
           
-          uniqueGuessedPlacements.forEach(placement => {
+          uniqueGuessedPlacements.forEach((placement: any) => {
             if (!placementsByUser.has(placement.placed_user_id)) {
               placementsByUser.set(placement.placed_user_id, [])
             }
@@ -294,7 +191,7 @@ export const useResults = () => {
             let totalX = 0
             let totalY = 0
             
-            placements.forEach(placement => {
+            placements.forEach((placement: any) => {
               const guesserProfile = profiles.find(p => p.id === placement.placer_user_id)
               
               individualGuesses.push({

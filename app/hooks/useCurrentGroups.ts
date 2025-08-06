@@ -2,16 +2,8 @@
 import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { supabase } from '../../lib/auth/supabase'
-
-interface CurrentGroup {
-  id: string
-  name: string
-  invite_code: string
-  created_by: string
-  created_at: string
-  creator_name?: string
-  member_count?: number
-}
+import { CurrentGroup } from '../types'
+import { GroupService, ProfileService } from '../lib/services'
 
 export const useCurrentGroup = () => {
   const router = useRouter()
@@ -47,11 +39,7 @@ export const useCurrentGroup = () => {
         console.log('Fetching group data for:', groupId)
 
         // Fetch group details
-        const { data: groupData, error: groupError } = await supabase
-          .from('groups')
-          .select('*')
-          .eq('id', groupId)
-          .single()
+        const { data: groupData, error: groupError } = await GroupService.getGroupById(groupId)
 
         if (groupError) {
           console.error('Error fetching group:', groupError)
@@ -64,11 +52,7 @@ export const useCurrentGroup = () => {
         // Get creator's profile info
         let creatorName = 'Unknown'
         if (groupData.created_by) {
-          const { data: creatorProfile, error: creatorError } = await supabase
-            .from('profiles')
-            .select('name')
-            .eq('id', groupData.created_by)
-            .single()
+          const { data: creatorProfile, error: creatorError } = await ProfileService.getProfile(groupData.created_by)
 
           if (!creatorError && creatorProfile) {
             creatorName = creatorProfile.name || 'Unknown'
@@ -76,10 +60,7 @@ export const useCurrentGroup = () => {
         }
 
         // Get member count
-        const { data: membersData, error: membersError } = await supabase
-          .from('group_members')
-          .select('id')
-          .eq('group_id', groupId)
+        const { data: membersData, error: membersError } = await GroupService.getGroupMembers(groupId)
 
         let memberCount = 0
         if (!membersError && membersData) {

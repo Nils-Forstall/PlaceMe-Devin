@@ -2,6 +2,8 @@
 
 import React, { useEffect, useState } from 'react'
 import Token, { TokenProps } from './Token'
+import { UI_CONSTANTS } from '../constants/ui'
+import { LABEL_COLORS } from '../constants/colors'
 
 interface AxisProps {
   labels: {
@@ -27,8 +29,8 @@ export default function Axis({
   labels,
   labelColors = {},
   backgroundColor = '#E0E7FF',
-  size: maxSize = 300,
-  tokenSize = 35,
+  size: maxSize = UI_CONSTANTS.AXIS_SIZE,
+  tokenSize = UI_CONSTANTS.TOKEN_SIZE,
   children,
   tokens = [],
 }: AxisProps) {
@@ -55,12 +57,12 @@ export default function Axis({
   }))
 
   // Padding from edge for labels
-  const pad = Math.round(currentSize * 0.06)
+  const pad = Math.round(currentSize * UI_CONSTANTS.AXIS_PADDING_RATIO)
   const baseLabelStyle = {
     borderRadius: '8px',
     boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
     padding: '4px 12px',
-    fontSize: Math.max(10, Math.round(currentSize * 0.05)), // 5% of size, min 10px
+    fontSize: Math.max(UI_CONSTANTS.MIN_FONT_SIZE, Math.round(currentSize * UI_CONSTANTS.FONT_SIZE_RATIO)),
     fontWeight: 800,
     pointerEvents: 'none' as const,
     userSelect: 'none' as const,
@@ -74,10 +76,10 @@ export default function Axis({
 
   // Calculate font size based on text length and container size
   const calculateFontSize = (text: string, isVertical: boolean = false) => {
-    const baseSize = Math.max(10, Math.round(currentSize * 0.07));
+    const baseSize = Math.max(UI_CONSTANTS.MIN_FONT_SIZE, Math.round(currentSize * 0.07));
     // Calculate available space - account for padding and container size
-    const availableSpace = currentSize * 0.8; // 60% of container size
-    const avgCharWidth = baseSize * 0.6; // Approximate width of a character
+    const availableSpace = currentSize * UI_CONSTANTS.AVAILABLE_SPACE_RATIO;
+    const avgCharWidth = baseSize * UI_CONSTANTS.CHAR_WIDTH_RATIO;
     const maxChars = Math.floor(availableSpace / avgCharWidth);
     const length = text.length;
     
@@ -85,7 +87,7 @@ export default function Axis({
     
     // Reduce font size proportionally to text length
     const reductionFactor = Math.min(1, maxChars / length);
-    return Math.max(10, Math.round(baseSize * reductionFactor));
+    return Math.max(UI_CONSTANTS.MIN_FONT_SIZE, Math.round(baseSize * reductionFactor));
   }
 
   return (
@@ -143,7 +145,7 @@ export default function Axis({
               ...baseLabelStyle,
               top: 0,
               transform: 'translateX(-50%)',
-              background: labelColors.top || 'rgba(255,255,255,0.85)',
+              background: labelColors?.top || LABEL_COLORS.DEFAULT.top,
               fontSize: calculateFontSize(labels.top),
               zIndex: 2,
             }}
@@ -157,7 +159,7 @@ export default function Axis({
               ...baseLabelStyle,
               bottom: 0,
               transform: 'translateX(-50%)',
-              background: labelColors.bottom || 'rgba(255,255,255,0.85)',
+              background: labelColors?.bottom || LABEL_COLORS.DEFAULT.bottom,
               fontSize: calculateFontSize(labels.bottom),
               zIndex: 2,
             }}
@@ -172,7 +174,7 @@ export default function Axis({
               left: 0,
               writingMode: 'vertical-lr',
               textOrientation: 'mixed',
-              background: labelColors.left || 'rgba(255,255,255,0.85)',
+              background: labelColors?.left || LABEL_COLORS.DEFAULT.left,
               transformOrigin: 'center',
               transform: 'translateY(-50%) rotate(180deg)',
               padding: '12px 4px',
@@ -191,7 +193,7 @@ export default function Axis({
               transform: 'translateY(-50%)',
               writingMode: 'vertical-lr',
               textOrientation: 'mixed',
-              background: labelColors.right || 'rgba(255,255,255,0.85)',
+              background: labelColors?.right || LABEL_COLORS.DEFAULT.right,
               padding: '12px 4px',
               fontSize: calculateFontSize(labels.right, true),
               zIndex: 2,
@@ -203,4 +205,4 @@ export default function Axis({
       </div>
     </div>
   )
-} 
+}  

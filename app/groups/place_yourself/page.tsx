@@ -10,9 +10,7 @@ import { DraggableToken } from '../../components/DraggableToken'
 import { useDailyAxis } from '../../hooks/useDailyAxis'
 import Axis from '../../components/Axis'
 
-// Constants for sizing
-const AXIS_SIZE = 300
-const TOKEN_SIZE = 35
+import { UI_CONSTANTS } from '../../constants/ui'
 
 export default function PlaceYourself() {
   const router = useRouter()
@@ -37,8 +35,8 @@ export default function PlaceYourself() {
   // Start at center of grid in normalized coordinates (0-1)
   const initialPositions = { 
     'user-token': { 
-      x: 0.5, // Center horizontally
-      y: 0.5  // Center vertically
+      x: UI_CONSTANTS.INITIAL_POSITION.CENTER_X,
+      y: UI_CONSTANTS.INITIAL_POSITION.CENTER_Y
     }
   }
   
@@ -229,19 +227,14 @@ export default function PlaceYourself() {
             >
               <div ref={gridRef} className="relative">
                 <Axis
-                  size={AXIS_SIZE}
+                  size={UI_CONSTANTS.AXIS_SIZE}
                   labels={dailyAxis?.labels || {
                     top: 'Loading...',
                     bottom: 'Loading...',
                     left: 'Loading...',
                     right: 'Loading...'
                   }}
-                  labelColors={dailyAxis?.labels.labelColors || {
-                    top: 'rgba(251, 207, 232, 0.95)', // Pink
-                    bottom: 'rgba(167, 243, 208, 0.95)', // Green
-                    left: 'rgba(221, 214, 254, 0.95)', // Purple
-                    right: 'rgba(253, 230, 138, 0.95)' // Yellow
-                  }}
+                  labelColors={dailyAxis?.labels.labelColors}
                 >
                   <DraggableToken
                     id="user-token"

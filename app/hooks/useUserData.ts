@@ -1,18 +1,12 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/auth/supabase'
+import { UserData } from '../types'
+import { GroupService, ProfileService } from '../lib/services'
 
 // Helper function to capitalize first letter
 function capitalizeFirstLetter(str: string): string {
   return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase()
-}
-
-interface UserData {
-  userName: string
-  firstName: string
-  userAvatar: string
-  loading: boolean
-  error: string | null
 }
 
 export function useUserData(): UserData {
@@ -40,11 +34,7 @@ export function useUserData(): UserData {
         const currentUserId = sessionStorage.getItem('currentUserId') || user.id
         
         // Get user profile
-        const { data: profile, error: profileError } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', currentUserId)
-          .single()
+        const { data: profile, error: profileError } = await ProfileService.getProfile(currentUserId)
         
         if (profileError) {
           console.error('Error fetching profile:', profileError)
@@ -84,23 +74,15 @@ export function useUserData(): UserData {
     
     if (groupId && groupCode) {
       // Check if user is a member
-      const { error: memberError } = await supabase
-        .from('group_members')
-        .select('*')
-        .eq('group_id', groupId)
-        .eq('user_id', currentUserId)
-        .single()
+      const { error: memberError } = await GroupService.checkMembership(currentUserId, groupId)
       
       if (memberError?.code === 'PGRST116') {
         // Add user as member
-        await supabase
-          .from('group_members')
-          .insert({
-            group_id: groupId,
-            user_id: currentUserId,
-            role: 'member',
-            joined_at: new Date().toISOString()
-          })
+        await GroupService.addGroupMember({
+          group_id: groupId,
+          user_id: currentUserId,
+          role: 'member'
+        })
       }
     } else {
       await handleNoGroupCase(currentUserId)
@@ -123,22 +105,14 @@ export function useUserData(): UserData {
       sessionStorage.setItem('currentGroupName', group.name)
       
       // Add creator as member if needed
-      const { error: memberError } = await supabase
-        .from('group_members')
-        .select('*')
-        .eq('group_id', group.id)
-        .eq('user_id', currentUserId)
-        .single()
+      const { error: memberError } = await GroupService.checkMembership(currentUserId, group.id)
       
       if (memberError?.code === 'PGRST116') {
-        await supabase
-          .from('group_members')
-          .insert({
-            group_id: group.id,
-            user_id: currentUserId,
-            role: 'creator',
-            joined_at: new Date().toISOString()
-          })
+        await GroupService.addGroupMember({
+          group_id: group.id,
+          user_id: currentUserId,
+          role: 'creator'
+        })
       }
     } else {
       await handleGroupMembership(currentUserId)
@@ -147,19 +121,10 @@ export function useUserData(): UserData {
 
   const handleGroupMembership = async (currentUserId: string) => {
     // Check for group memberships
-    const { data: groupMemberships } = await supabase
-      .from('group_members')
-      .select('group_id')
-      .eq('user_id', currentUserId)
-      .order('joined_at', { ascending: false })
-      .limit(1)
+    const { data: groupMemberships } = await GroupService.getGroupMemberships(currentUserId)
     
     if (groupMemberships?.length) {
-      const { data: group } = await supabase
-        .from('groups')
-        .select('*')
-        .eq('id', groupMemberships[0].group_id)
-        .single()
+      const { data: group } = await GroupService.getGroupById(groupMemberships[0].group_id)
         
       if (group) {
         sessionStorage.setItem('currentGroupId', group.id)
@@ -175,4 +140,4 @@ export function useUserData(): UserData {
   }
 
   return { userName, firstName, userAvatar, loading, error }
-} 
+}  
