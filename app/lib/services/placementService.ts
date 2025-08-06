@@ -1,4 +1,4 @@
-import { supabase } from '../../lib/auth/supabase'
+import { supabase } from '../../../lib/auth/supabase'
 
 export class PlacementService {
   static async getSelfPlacements(groupId: string, axisId: string) {

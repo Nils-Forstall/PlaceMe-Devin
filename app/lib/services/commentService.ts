@@ -1,4 +1,4 @@
-import { supabase } from '../../lib/auth/supabase'
+import { supabase } from '../../../lib/auth/supabase'
 
 export class CommentService {
   static async getComments(groupId: string, targetUserId: string, viewType: string, axisId: string) {

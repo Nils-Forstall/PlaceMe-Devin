@@ -1,4 +1,4 @@
-import { supabase } from '../../lib/auth/supabase'
+import { supabase } from '../../../lib/auth/supabase'
 
 export class GroupService {
   static async getGroupMemberships(userId: string) {

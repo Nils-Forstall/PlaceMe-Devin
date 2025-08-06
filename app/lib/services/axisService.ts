@@ -1,4 +1,4 @@
-import { supabase } from '../../lib/auth/supabase'
+import { supabase } from '../../../lib/auth/supabase'
 
 export class AxisService {
   static async getAxesForGroup(groupId: string, limit: number = 10) {

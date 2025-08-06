@@ -1,4 +1,4 @@
-import { supabase } from '../../lib/auth/supabase'
+import { supabase } from '../../../lib/auth/supabase'
 
 export class ProfileService {
   static async getProfile(userId: string) {
