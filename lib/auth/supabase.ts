@@ -31,6 +31,12 @@ export const supabase = createClient(finalUrl, finalKey)
 export async function initializeDatabase() {
   console.log('Initializing database tables...')
   
+  if (finalUrl === 'https://dummy.supabase.co') {
+    console.log('Using dummy credentials - skipping database initialization')
+    console.log('Please update .env.local with real Supabase credentials to enable automatic table creation')
+    return { supabase }
+  }
+  
   try {
     const { error: profilesCheck } = await supabase
       .from('profiles')
@@ -38,107 +44,209 @@ export async function initializeDatabase() {
       .limit(1)
     
     if (profilesCheck) {
-      console.log('Tables do not exist, attempting to create them...')
+      console.log('Tables do not exist, attempting to create them programmatically...')
       
-      console.error('Database tables need to be created manually in Supabase dashboard.')
-      console.log('Please create the following tables in your Supabase dashboard:')
-      console.log(`
-        1. profiles table:
-           - id (uuid, primary key, references auth.users(id))
-           - name (text, not null)
-           - email (text, unique, not null)
-           - phone (text)
-           - avatar_url (text)
-           - username (text)
-           - full_name (text)
-           - created_at (timestamptz, default now())
+      const createTablesSQL = `
+        -- Enable UUID extension if not already enabled
+        CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+        
+        -- Create profiles table
+        CREATE TABLE IF NOT EXISTS public.profiles (
+          id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+          name TEXT NOT NULL,
+          email TEXT UNIQUE NOT NULL,
+          phone TEXT,
+          avatar_url TEXT,
+          username TEXT,
+          full_name TEXT,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
 
-        2. groups table:
-           - id (uuid, primary key, default uuid_generate_v4())
-           - name (text, not null)
-           - invite_code (text, unique, not null)
-           - created_by (uuid, references profiles(id))
-           - settings (jsonb, default '{}')
-           - created_at (timestamptz, default now())
+        -- Create groups table
+        CREATE TABLE IF NOT EXISTS public.groups (
+          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+          name TEXT NOT NULL,
+          invite_code TEXT UNIQUE NOT NULL,
+          created_by UUID REFERENCES public.profiles(id),
+          settings JSONB DEFAULT '{}',
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
 
-        3. group_members table:
-           - id (uuid, primary key, default uuid_generate_v4())
-           - group_id (uuid, references groups(id) on delete cascade)
-           - user_id (uuid, references profiles(id) on delete cascade)
-           - role (text, default 'member')
-           - joined_at (timestamptz, default now())
-           - unique constraint on (group_id, user_id)
+        -- Create group_members table
+        CREATE TABLE IF NOT EXISTS public.group_members (
+          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+          group_id UUID REFERENCES public.groups(id) ON DELETE CASCADE,
+          user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
+          role TEXT DEFAULT 'member',
+          joined_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          UNIQUE(group_id, user_id)
+        );
 
-        4. login_events table:
-           - id (uuid, primary key, default uuid_generate_v4())
-           - user_id (uuid, references profiles(id))
-           - email (text, not null)
-           - timestamp (timestamptz, default now())
-           - success (boolean, not null)
-           - device_info (text)
+        -- Create login_events table
+        CREATE TABLE IF NOT EXISTS public.login_events (
+          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+          user_id UUID REFERENCES public.profiles(id),
+          email TEXT NOT NULL,
+          timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          success BOOLEAN NOT NULL,
+          device_info TEXT
+        );
 
-        5. axes table:
-           - id (uuid, primary key, default uuid_generate_v4())
-           - group_id (uuid, references groups(id) on delete cascade)
-           - vertical_axis_pair_id (text, not null)
-           - horizontal_axis_pair_id (text, not null)
-           - left_label (text, not null)
-           - right_label (text, not null)
-           - top_label (text, not null)
-           - bottom_label (text, not null)
-           - date_generated (date, not null)
-           - is_active (boolean, default true)
-           - created_at (timestamptz, default now())
+        -- Create axes table
+        CREATE TABLE IF NOT EXISTS public.axes (
+          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+          group_id UUID REFERENCES public.groups(id) ON DELETE CASCADE,
+          vertical_axis_pair_id TEXT NOT NULL,
+          horizontal_axis_pair_id TEXT NOT NULL,
+          left_label TEXT NOT NULL,
+          right_label TEXT NOT NULL,
+          top_label TEXT NOT NULL,
+          bottom_label TEXT NOT NULL,
+          date_generated DATE NOT NULL,
+          is_active BOOLEAN DEFAULT true,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
 
-        6. place_yourself table:
-           - id (uuid, primary key, default uuid_generate_v4())
-           - user_id (uuid, references profiles(id) on delete cascade)
-           - group_id (uuid, references groups(id) on delete cascade)
-           - group_code (text, not null)
-           - username (text, not null)
-           - first_name (text, not null)
-           - position_x (numeric(5,4), not null)
-           - position_y (numeric(5,4), not null)
-           - top_label (text, not null)
-           - bottom_label (text, not null)
-           - left_label (text, not null)
-           - right_label (text, not null)
-           - axis_id (uuid, references axes(id) on delete cascade)
-           - vertical_axis_pair_id (text, not null)
-           - horizontal_axis_pair_id (text, not null)
-           - date_placed (timestamptz, default now())
-           - created_at (timestamptz, default now())
-           - updated_at (timestamptz, default now())
+        -- Create place_yourself table
+        CREATE TABLE IF NOT EXISTS public.place_yourself (
+          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+          user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
+          group_id UUID REFERENCES public.groups(id) ON DELETE CASCADE,
+          group_code TEXT NOT NULL,
+          username TEXT NOT NULL,
+          first_name TEXT NOT NULL,
+          position_x DECIMAL(5,4) NOT NULL,
+          position_y DECIMAL(5,4) NOT NULL,
+          top_label TEXT NOT NULL,
+          bottom_label TEXT NOT NULL,
+          left_label TEXT NOT NULL,
+          right_label TEXT NOT NULL,
+          axis_id UUID REFERENCES public.axes(id) ON DELETE CASCADE,
+          vertical_axis_pair_id TEXT NOT NULL,
+          horizontal_axis_pair_id TEXT NOT NULL,
+          date_placed TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
 
-        7. place_others table:
-           - id (uuid, primary key, default uuid_generate_v4())
-           - placer_user_id (uuid, references profiles(id) on delete cascade)
-           - placed_user_id (uuid, references profiles(id) on delete cascade)
-           - group_id (uuid, references groups(id) on delete cascade)
-           - axis_id (uuid, references axes(id) on delete cascade)
-           - position_x (numeric(5,4), not null)
-           - position_y (numeric(5,4), not null)
-           - created_at (timestamptz, default now())
+        -- Create place_others table
+        CREATE TABLE IF NOT EXISTS public.place_others (
+          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+          placer_user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
+          placed_user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
+          group_id UUID REFERENCES public.groups(id) ON DELETE CASCADE,
+          axis_id UUID REFERENCES public.axes(id) ON DELETE CASCADE,
+          position_x DECIMAL(5,4) NOT NULL,
+          position_y DECIMAL(5,4) NOT NULL,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
 
-        8. comments table:
-           - id (uuid, primary key, default uuid_generate_v4())
-           - group_id (uuid, references groups(id) on delete cascade)
-           - commenter_user_id (uuid, references profiles(id) on delete cascade)
-           - target_user_id (uuid, references profiles(id) on delete cascade)
-           - view_type (text, not null)
-           - axis_id (uuid, references axes(id) on delete cascade)
-           - comment_text (text, not null)
-           - is_deleted (boolean, default false)
-           - created_at (timestamptz, default now())
-      `)
-      
-      console.warn('Continuing without database tables - authentication may fail until tables are created manually')
+        -- Create comments table
+        CREATE TABLE IF NOT EXISTS public.comments (
+          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+          group_id UUID REFERENCES public.groups(id) ON DELETE CASCADE,
+          commenter_user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
+          target_user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
+          view_type TEXT NOT NULL,
+          axis_id UUID REFERENCES public.axes(id) ON DELETE CASCADE,
+          comment_text TEXT NOT NULL,
+          is_deleted BOOLEAN DEFAULT false,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
+
+        -- Create indexes for better performance
+        CREATE INDEX IF NOT EXISTS profiles_email_idx ON public.profiles (email);
+        CREATE INDEX IF NOT EXISTS group_members_group_id_idx ON public.group_members (group_id);
+        CREATE INDEX IF NOT EXISTS group_members_user_id_idx ON public.group_members (user_id);
+        CREATE INDEX IF NOT EXISTS axes_group_id_idx ON public.axes (group_id);
+        CREATE INDEX IF NOT EXISTS place_yourself_user_id_idx ON public.place_yourself (user_id);
+        CREATE INDEX IF NOT EXISTS place_yourself_axis_id_idx ON public.place_yourself (axis_id);
+        CREATE INDEX IF NOT EXISTS place_others_placer_user_id_idx ON public.place_others (placer_user_id);
+        CREATE INDEX IF NOT EXISTS place_others_axis_id_idx ON public.place_others (axis_id);
+        CREATE INDEX IF NOT EXISTS comments_group_id_idx ON public.comments (group_id);
+        CREATE INDEX IF NOT EXISTS comments_axis_id_idx ON public.comments (axis_id);
+
+        -- Enable Row Level Security (RLS) on all tables
+        ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+        ALTER TABLE public.groups ENABLE ROW LEVEL SECURITY;
+        ALTER TABLE public.group_members ENABLE ROW LEVEL SECURITY;
+        ALTER TABLE public.login_events ENABLE ROW LEVEL SECURITY;
+        ALTER TABLE public.axes ENABLE ROW LEVEL SECURITY;
+        ALTER TABLE public.place_yourself ENABLE ROW LEVEL SECURITY;
+        ALTER TABLE public.place_others ENABLE ROW LEVEL SECURITY;
+        ALTER TABLE public.comments ENABLE ROW LEVEL SECURITY;
+
+        -- Create basic RLS policies for profiles table
+        CREATE POLICY "Users can view own profile" ON public.profiles
+          FOR SELECT USING (auth.uid() = id);
+        
+        CREATE POLICY "Users can update own profile" ON public.profiles
+          FOR UPDATE USING (auth.uid() = id);
+        
+        CREATE POLICY "Users can insert own profile" ON public.profiles
+          FOR INSERT WITH CHECK (auth.uid() = id);
+      `
+
+      const { error: createError } = await supabase.rpc('exec_sql', {
+        sql: createTablesSQL
+      })
+
+      if (createError) {
+        console.error('Error creating tables with RPC, trying alternative approach:', createError)
+        
+        const tables = [
+          {
+            name: 'profiles',
+            sql: `CREATE TABLE IF NOT EXISTS public.profiles (
+              id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+              name TEXT NOT NULL,
+              email TEXT UNIQUE NOT NULL,
+              phone TEXT,
+              avatar_url TEXT,
+              username TEXT,
+              full_name TEXT,
+              created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+            )`
+          },
+          {
+            name: 'groups',
+            sql: `CREATE TABLE IF NOT EXISTS public.groups (
+              id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+              name TEXT NOT NULL,
+              invite_code TEXT UNIQUE NOT NULL,
+              created_by UUID,
+              settings JSONB DEFAULT '{}',
+              created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+            )`
+          }
+        ]
+
+        console.log('Attempting to create tables individually...')
+        for (const table of tables) {
+          try {
+            const { error } = await supabase.rpc('exec_sql', { sql: table.sql })
+            if (error) {
+              console.error(`Failed to create ${table.name} table:`, error)
+            } else {
+              console.log(`✅ Created ${table.name} table`)
+            }
+          } catch (err) {
+            console.error(`Error creating ${table.name} table:`, err)
+          }
+        }
+        
+        console.warn('Some tables may not have been created. You may need to create them manually in Supabase dashboard.')
+        console.log('Full SQL schema available in console logs above.')
+      } else {
+        console.log('✅ All database tables created successfully!')
+      }
     } else {
-      console.log('Database tables already exist!')
+      console.log('✅ Database tables already exist!')
     }
   } catch (err) {
-    console.error('Database initialization check failed:', err)
-    console.warn('Continuing without database verification - authentication may fail if tables do not exist')
+    console.error('Database initialization failed:', err)
+    console.log('Falling back to manual setup instructions...')
+    console.log('Please create the required tables manually in your Supabase dashboard using the SQL schema provided above.')
   }
 
   return { supabase }
