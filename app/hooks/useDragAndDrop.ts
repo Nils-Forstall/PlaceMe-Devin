@@ -72,8 +72,8 @@ export function useDragAndDrop(initialPositions: TokenPositions): DragAndDropSta
         const circleSize = TOKEN_SIZE / GRID_SIZE
         
         // Clamp the position to ensure the circle stays within bounds
-        const clampedX = Math.max(0, Math.min(1 - circleSize, newNormalizedX))
-        const clampedY = Math.max(0, Math.min(1 - circleSize, newNormalizedY))
+        const clampedX = Math.max(0, Math.min(1, newNormalizedX))
+        const clampedY = Math.max(0, Math.min(1, newNormalizedY))
         
         setPositions(prev => ({
           ...prev,
@@ -107,4 +107,4 @@ export function useDragAndDrop(initialPositions: TokenPositions): DragAndDropSta
     handleDragCancel,
     updatePosition
   }
-} 
+}  
